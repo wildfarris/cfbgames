@@ -1,0 +1,59 @@
+{{ partial "header.html" . }}
+
+
+{{ $key := getenv "HUGO_apikey" }}
+{{ $apikey := replace "Bearer APIKEY" "APIKEY" $key}}
+{{ $year := "2023"}}
+{{ $headers := (dict 
+    "Content-Type" "application/json"
+    "Authorization" $apikey
+) }}
+
+{{ $rankings := resources.GetRemote "https://api.collegefootballdata.com/rankings?year=2023"  (dict 
+    "method" "get"
+    "headers" $headers
+)}}
+
+{{ $games := resources.GetRemote "https://api.collegefootballdata.com/games?year=2023&division=fbs"  (dict 
+    "method" "get"
+    "headers" $headers
+)}}
+
+{{ $rankedteams := slice }}
+{{ $rankref := slice }}
+
+{{ with $rankings }}
+    {{ $lastestranking := unmarshal .Content | last 1 }}
+    {{ range $lastestranking }}
+        {{ range where .polls "poll" "AP Top 25" }}
+            {{range .ranks}}
+                {{ $rankedteams = $rankedteams | append .school }}
+                {{ $rankref = $rankref | append (dict "school" .school "rank" .rank) }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+<table class="game-table">
+    <thead>
+        <tr>
+        <th>Week</th>
+        <th>Away Team</th>
+        <th>Home Team</th>
+        </tr>
+    </thead>
+    <tbody>
+    {{ with $games}}
+        {{ $games := unmarshal .Content }}
+        {{ range where (where (where $games "completed" false) "home_team" "in" $rankedteams) "away_team" "in" $rankedteams }}
+            <tr>
+                <td>{{ .week }}</td>
+                <td>{{ .away_team }} ({{ range where $rankref "school" .away_team }}{{ .rank }}{{ end }})</td>
+                <td>{{ .home_team }} ({{ range where $rankref "school" .home_team }}{{ .rank }}{{ end }})</td>
+            </tr>
+        {{ end }}
+    {{ end }}
+    </tbody>
+</table>
+
+{{ partial "footer.html" . }}
