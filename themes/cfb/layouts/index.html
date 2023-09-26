@@ -3,18 +3,20 @@
 
 {{ $key := getenv "HUGO_apikey" }}
 {{ $apikey := replace "Bearer APIKEY" "APIKEY" $key}}
-{{ $year := "2023"}}
+{{ $year := now.Format "2006" }}
+{{ $rankurl := printf "https://api.collegefootballdata.com/rankings?year=%s" $year }}
+{{ $gameurl := printf "https://api.collegefootballdata.com/games?division=fbs&year=%s" $year }}
 {{ $headers := (dict 
     "Content-Type" "application/json"
     "Authorization" $apikey
 ) }}
 
-{{ $rankings := resources.GetRemote "https://api.collegefootballdata.com/rankings?year=2023"  (dict 
+{{ $rankings := resources.GetRemote $rankurl (dict 
     "method" "get"
     "headers" $headers
 )}}
 
-{{ $games := resources.GetRemote "https://api.collegefootballdata.com/games?year=2023&division=fbs"  (dict 
+{{ $games := resources.GetRemote $gameurl (dict 
     "method" "get"
     "headers" $headers
 )}}
