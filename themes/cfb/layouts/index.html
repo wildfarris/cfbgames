@@ -1,7 +1,7 @@
 {{ partial "header.html" . }}
 
 
-{{ $key := getenv "HUGO_apikey" }}
+{{ $key := getenv "HUGO_APIKEY" }}
 {{ $apikey := replace "Bearer APIKEY" "APIKEY" $key}}
 {{ $year := now.Format "2006" }}
 {{ $rankurl := printf "https://api.collegefootballdata.com/rankings?year=%s" $year }}
