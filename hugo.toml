@@ -2,7 +2,7 @@ baseURL = 'https://cfb.phares.io/'
 languageCode = 'en-us'
 title = 'Remaining CFB Ranked Matchups'
 theme = 'cfb'
-disableKinds = ['taxonomy', 'taxonomyTerm']
+disableKinds = ['taxonomy', 'term']
 
 
 [caches]
