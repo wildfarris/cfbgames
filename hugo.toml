@@ -4,7 +4,10 @@ title = 'Remaining CFB Ranked Matchups'
 theme = 'cfb'
 disableKinds = ['taxonomy', 'term']
 
+[params]
+  apiBaseUrl = 'https://api.collegefootballdata.com'
 
+# resources.GetRemote uses the getresource cache (getjson is only for data.GetJSON).
 [caches]
-  [caches.getjson]
+  [caches.getresource]
     maxAge = "14h"

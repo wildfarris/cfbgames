@@ -1,0 +1,25 @@
+{{/*
+    Fetches a JSON document from the CollegeFootballData API and returns the decoded value.
+
+    Expects a dict with:
+      url     - the full request URL
+      options - the resources.GetRemote options (headers, etc.)
+
+    Any failure fails the build on purpose: a scheduled deploy should keep the
+    last good page live rather than publish an empty table.
+*/}}
+{{ $url := .url }}
+{{ $decoded := slice }}
+
+{{ with resources.GetRemote $url .options }}
+    {{ with .Err }}
+        {{ errorf "Failed to fetch %s: %s" $url . }}
+    {{ else }}
+        {{/* Unmarshal the resource (not .Content) so the response Content-Type decides the format; an empty JSON array would otherwise fail format sniffing. */}}
+        {{ $decoded = unmarshal . }}
+    {{ end }}
+{{ else }}
+    {{ errorf "Failed to fetch %s: no response" $url }}
+{{ end }}
+
+{{ return $decoded }}

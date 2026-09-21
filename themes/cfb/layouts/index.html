@@ -1,38 +1,57 @@
 {{ partial "header.html" . }}
 
+{{/* The CollegeFootballData API requires a bearer token; CI passes it in as HUGO_APIKEY. */}}
+{{ $apiKey := getenv "HUGO_APIKEY" }}
+{{ if not $apiKey }}
+    {{ errorf "HUGO_APIKEY is not set. The CollegeFootballData API requires an API key." }}
+{{ end }}
 
-{{ $key := getenv "HUGO_APIKEY" }}
-{{ $apikey := replace "Bearer APIKEY" "APIKEY" $key}}
-{{ $year := now.Format "2006" }}
-{{ $rankurl := printf "https://api.collegefootballdata.com/rankings?year=%s" $year }}
-{{ $gameurl := printf "https://api.collegefootballdata.com/games?division=fbs&year=%s" $year }}
-{{ $headers := (dict 
-    "Content-Type" "application/json"
-    "Authorization" $apikey
+{{/*
+    A college football season runs from late August into January, so before
+    August the season still in progress (or just finished) is the previous
+    calendar year's.
+*/}}
+{{ $seasonYear := now.Year }}
+{{ if lt (int (now.Format "1")) 8 }}
+    {{ $seasonYear = sub $seasonYear 1 }}
+{{ end }}
+
+{{ $apiBaseUrl := default "https://api.collegefootballdata.com" site.Params.apiBaseUrl }}
+{{ $rankingsUrl := printf "%s/rankings?year=%d" $apiBaseUrl $seasonYear }}
+{{ $gamesUrl := printf "%s/games?year=%d&classification=fbs&seasonType=both" $apiBaseUrl $seasonYear }}
+{{ $requestOptions := dict "headers" (dict
+    "Accept" "application/json"
+    "Authorization" (printf "Bearer %s" $apiKey)
 ) }}
 
-{{ $rankings := resources.GetRemote $rankurl (dict 
-    "method" "get"
-    "headers" $headers
-)}}
+{{ $rankingWeeks := partial "cfbd-fetch.html" (dict "url" $rankingsUrl "options" $requestOptions) }}
+{{ $games := partial "cfbd-fetch.html" (dict "url" $gamesUrl "options" $requestOptions) }}
 
-{{ $games := resources.GetRemote $gameurl (dict 
-    "method" "get"
-    "headers" $headers
-)}}
-
-{{ $rankedteams := slice }}
-{{ $rankref := slice }}
-
-{{ with $rankings }}
-    {{ $lastestranking := unmarshal .Content | last 1 }}
-    {{ range $lastestranking }}
-        {{ range where .polls "poll" "AP Top 25" }}
-            {{range .ranks}}
-                {{ $rankedteams = $rankedteams | append .school }}
-                {{ $rankref = $rankref | append (dict "school" .school "rank" .rank) }}
+{{/*
+    Use the most recent AP Top 25. A postseason poll (the final poll) wins over
+    any regular-season week; otherwise take the latest regular-season week that
+    actually includes the AP poll.
+*/}}
+{{ $apRanks := slice }}
+{{ range $seasonType := slice "postseason" "regular" }}
+    {{ range sort (where $rankingWeeks "seasonType" $seasonType) "week" "desc" }}
+        {{ if not $apRanks }}
+            {{ range where .polls "poll" "AP Top 25" }}
+                {{ $apRanks = .ranks }}
             {{ end }}
         {{ end }}
+    {{ end }}
+{{ end }}
+
+{{ $rankBySchool := dict }}
+{{ range $apRanks }}
+    {{ $rankBySchool = merge $rankBySchool (dict .school .rank) }}
+{{ end }}
+
+{{ $remainingRankedGames := slice }}
+{{ range sort (where $games "completed" false) "startDate" }}
+    {{ if and (isset $rankBySchool .homeTeam) (isset $rankBySchool .awayTeam) }}
+        {{ $remainingRankedGames = $remainingRankedGames | append . }}
     {{ end }}
 {{ end }}
 
@@ -45,15 +64,16 @@
         </tr>
     </thead>
     <tbody>
-    {{ with $games}}
-        {{ $games := unmarshal .Content }}
-        {{ range where (where (where $games "completed" false) "home_team" "in" $rankedteams) "away_team" "in" $rankedteams }}
-            <tr>
-                <td>{{ .week }}</td>
-                <td>{{ .away_team }} ({{ range where $rankref "school" .away_team }}{{ .rank }}{{ end }})</td>
-                <td>{{ .home_team }} ({{ range where $rankref "school" .home_team }}{{ .rank }}{{ end }})</td>
-            </tr>
-        {{ end }}
+    {{ range $remainingRankedGames }}
+        <tr>
+            <td>{{ if eq .seasonType "postseason" }}Postseason{{ else }}{{ .week }}{{ end }}</td>
+            <td>{{ .awayTeam }} ({{ index $rankBySchool .awayTeam }})</td>
+            <td>{{ .homeTeam }} ({{ index $rankBySchool .homeTeam }})</td>
+        </tr>
+    {{ else }}
+        <tr>
+            <td colspan="3">No remaining matchups between AP Top 25 teams.</td>
+        </tr>
     {{ end }}
     </tbody>
 </table>
