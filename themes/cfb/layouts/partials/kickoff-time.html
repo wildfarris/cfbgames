@@ -1,0 +1,16 @@
+{{- /*
+    A kickoff as a <time> element. The text is rendered in UTC at build time;
+    slate.js rewrites it into the viewer's local time using the data-format.
+
+    Expects a dict with:
+      game   - a CFBD game
+      format - "weekday", "date", "time" or "long"
+      class  - optional CSS class
+*/ -}}
+{{- $kickoff := time.AsTime .game.startDate -}}
+{{- $layouts := dict "weekday" "Mon" "date" "Jan 2" "time" "3:04 PM UTC" "long" "Monday, January 2" -}}
+{{- if and (eq .format "time") .game.startTimeTBD -}}
+    <span class="{{ .class }} is-tba">Time TBA</span>
+{{- else -}}
+    <time class="{{ .class }}" datetime="{{ .game.startDate }}" data-format="{{ .format }}">{{ $kickoff.UTC.Format (index $layouts .format) }}</time>
+{{- end -}}

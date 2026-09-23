@@ -1,6 +1,7 @@
-</main>
-    <footer>
-        <p>Last updated: {{ now | time.Format ":date_long" }} {{ now | time.Format ":time_long" }}</p>
-    </footer>
+	<footer class="colophon">
+		<span>Rankings &amp; schedule from <a href="https://collegefootballdata.com" rel="noopener">CollegeFootballData.com</a>. Reprinted every morning; finished games fall off the card.</span>
+		<span>Last updated {{ now.UTC | time.Format "January 2, 2006 at 3:04 PM" }} UTC</span>
+	</footer>
+</div>
 </body>
 </html>
