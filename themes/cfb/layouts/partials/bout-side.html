@@ -1,0 +1,14 @@
+{{/*
+    One team's half of a ticket.
+
+    Expects a dict with:
+      team  - a team entry from ranked-slate-data.html
+      class - "is-away" or "is-home"
+*/}}
+<div class="bout-side {{ .class }}" data-school="{{ .team.school }}">
+    {{ partial "rank-patch.html" .team }}
+    <span class="bout-team">
+        <span class="bout-name">{{ .team.school }}</span>
+        <span class="bout-conf">{{ .team.conference }}</span>
+    </span>
+</div>

@@ -1,0 +1,33 @@
+{{/*
+    "Circle the Date": the remaining game with the lowest combined AP rank,
+    with a countdown that slate.js fills in. Expects the dict returned by
+    ranked-slate-data.html and renders nothing when no games remain.
+*/}}
+{{ with .headliner }}
+    {{ $away := index $.teamBySchool .awayTeam }}
+    {{ $home := index $.teamBySchool .homeTeam }}
+    {{ $weekLabel := cond (eq .seasonType "postseason") "Postseason" (printf "Week %d" (int .week)) }}
+    <section class="headliner" aria-labelledby="headliner-banner">
+        <span class="headliner-banner" id="headliner-banner">Circle the Date · {{ $weekLabel }}</span>
+        <div class="headliner-side">
+            {{ partial "rank-patch.html" $away }}
+            <span class="headliner-team">{{ .awayTeam }}</span>
+        </div>
+        <span class="headliner-at">{{ cond .neutralSite "vs." "at" }}</span>
+        <div class="headliner-side">
+            {{ partial "rank-patch.html" $home }}
+            <span class="headliner-team">{{ .homeTeam }}</span>
+        </div>
+        <div class="headliner-footer">
+            <div class="headliner-venue">
+                <span class="eyebrow">{{ with .notes }}{{ . }}{{ else }}Best remaining matchup{{ end }} · Combined rank {{ $.headlinerRankSum }}</span>
+                {{ with .venue }}{{ . }} — {{ end }}{{ partial "kickoff-time.html" (dict "game" . "format" "long") }}{{ if not .startTimeTBD }}, {{ partial "kickoff-time.html" (dict "game" . "format" "time") }}{{ end }}
+            </div>
+            <div class="countdown" data-countdown-to="{{ .startDate }}" hidden>
+                <span class="countdown-cell"><b data-countdown-unit="days">00</b><small>DAYS</small></span>
+                <span class="countdown-cell"><b data-countdown-unit="hours">00</b><small>HRS</small></span>
+                <span class="countdown-cell"><b data-countdown-unit="minutes">00</b><small>MIN</small></span>
+            </div>
+        </div>
+    </section>
+{{ end }}

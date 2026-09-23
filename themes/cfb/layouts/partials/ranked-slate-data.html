@@ -1,0 +1,122 @@
+{{/*
+    Builds everything the home page renders from the two CollegeFootballData
+    requests (rankings and games). No other endpoints are used.
+
+    Returns a dict with:
+      seasonYear  - the season being shown
+      pollWeek    - the week of the AP poll in use (0 when there is none yet)
+      pollIsFinal - true when the poll in use is the postseason (final) poll
+      teams       - the AP Top 25 in rank order, each with rank, school,
+                    conference and rankedGamesLeft
+      teamBySchool - the same entries keyed by school
+      games       - remaining games between two ranked teams, by kickoff
+      weekGroups  - one entry per week of .games, in order, each with a
+                    label and the games in it
+      headliner   - the remaining game with the lowest combined AP rank
+                    (earliest kickoff wins ties), or false when none remain
+      headlinerRankSum - that game's combined AP rank
+*/}}
+
+{{/* The CollegeFootballData API requires a bearer token; CI passes it in as HUGO_APIKEY. */}}
+{{ $apiKey := getenv "HUGO_APIKEY" }}
+{{ if not $apiKey }}
+    {{ errorf "HUGO_APIKEY is not set. The CollegeFootballData API requires an API key." }}
+{{ end }}
+
+{{/*
+    A college football season runs from late August into January, so before
+    August the season still in progress (or just finished) is the previous
+    calendar year's.
+*/}}
+{{ $seasonYear := now.Year }}
+{{ if lt (int (now.Format "1")) 8 }}
+    {{ $seasonYear = sub $seasonYear 1 }}
+{{ end }}
+
+{{ $apiBaseUrl := default "https://api.collegefootballdata.com" site.Params.apiBaseUrl }}
+{{ $rankingsUrl := printf "%s/rankings?year=%d" $apiBaseUrl $seasonYear }}
+{{ $gamesUrl := printf "%s/games?year=%d&classification=fbs&seasonType=both" $apiBaseUrl $seasonYear }}
+{{ $requestOptions := dict "headers" (dict
+    "Accept" "application/json"
+    "Authorization" (printf "Bearer %s" $apiKey)
+) }}
+
+{{ $rankingWeeks := partial "cfbd-fetch.html" (dict "url" $rankingsUrl "options" $requestOptions) }}
+{{ $allGames := partial "cfbd-fetch.html" (dict "url" $gamesUrl "options" $requestOptions) }}
+
+{{/*
+    Use the most recent AP Top 25. A postseason poll (the final poll) wins over
+    any regular-season week; otherwise take the latest regular-season week that
+    actually includes the AP poll.
+*/}}
+{{ $apRanks := slice }}
+{{ $pollWeek := 0 }}
+{{ $pollIsFinal := false }}
+{{ range $seasonType := slice "postseason" "regular" }}
+    {{ range $rankingWeek := sort (where $rankingWeeks "seasonType" $seasonType) "week" "desc" }}
+        {{ if not $apRanks }}
+            {{ range where $rankingWeek.polls "poll" "AP Top 25" }}
+                {{ $apRanks = sort .ranks "rank" }}
+                {{ $pollWeek = $rankingWeek.week }}
+                {{ $pollIsFinal = eq $seasonType "postseason" }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{ $rankedSchools := slice }}
+{{ $rankBySchool := dict }}
+{{ range $apRanks }}
+    {{ $rankedSchools = $rankedSchools | append .school }}
+    {{ $rankBySchool = merge $rankBySchool (dict .school .rank) }}
+{{ end }}
+
+{{ $games := slice }}
+{{ range sort (where $allGames "completed" false) "startDate" }}
+    {{ if and (in $rankedSchools .homeTeam) (in $rankedSchools .awayTeam) }}
+        {{ $games = $games | append . }}
+    {{ end }}
+{{ end }}
+
+{{ $teams := slice }}
+{{ $teamBySchool := dict }}
+{{ range $apRanks }}
+    {{ $rankedGamesLeft := add (len (where $games "homeTeam" .school)) (len (where $games "awayTeam" .school)) }}
+    {{ $team := dict "rank" .rank "school" .school "conference" .conference "rankedGamesLeft" $rankedGamesLeft }}
+    {{ $teams = $teams | append $team }}
+    {{ $teamBySchool = merge $teamBySchool (dict .school $team) }}
+{{ end }}
+
+{{ $weekGroups := slice }}
+{{ $previousWeekKey := "" }}
+{{ range $games }}
+    {{ $weekKey := printf "%s-%d" .seasonType (int .week) }}
+    {{ if ne $weekKey $previousWeekKey }}
+        {{ $label := cond (eq .seasonType "postseason") "Postseason" (printf "Week %d" (int .week)) }}
+        {{ $weekGames := where (where $games "seasonType" .seasonType) "week" .week }}
+        {{ $weekGroups = $weekGroups | append (dict "label" $label "games" $weekGames) }}
+        {{ $previousWeekKey = $weekKey }}
+    {{ end }}
+{{ end }}
+
+{{ $headliner := false }}
+{{ $headlinerRankSum := 0 }}
+{{ range $games }}
+    {{ $rankSum := add (index $rankBySchool .homeTeam) (index $rankBySchool .awayTeam) }}
+    {{ if or (not $headliner) (lt $rankSum $headlinerRankSum) }}
+        {{ $headliner = . }}
+        {{ $headlinerRankSum = $rankSum }}
+    {{ end }}
+{{ end }}
+
+{{ return dict
+    "seasonYear" $seasonYear
+    "pollWeek" $pollWeek
+    "pollIsFinal" $pollIsFinal
+    "teams" $teams
+    "teamBySchool" $teamBySchool
+    "games" $games
+    "weekGroups" $weekGroups
+    "headliner" $headliner
+    "headlinerRankSum" $headlinerRankSum
+}}

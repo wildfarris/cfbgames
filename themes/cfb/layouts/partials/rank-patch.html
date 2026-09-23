@@ -1,0 +1,2 @@
+{{/* A team's AP rank as a sewn-on patch. Expects a team entry from ranked-slate-data.html. */}}
+<span class="patch{{ if le .rank 10 }} is-top10{{ end }}" aria-label="Ranked number {{ .rank }}">{{ .rank }}</span>

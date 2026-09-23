@@ -1,0 +1,21 @@
+{{/* The program cover. Expects the dict returned by ranked-slate-data.html. */}}
+{{ $pollLabel := cond .pollIsFinal "Final AP Poll" (printf "AP Poll Week %d" (int .pollWeek)) }}
+<header class="cover">
+    <div class="cover-rail eyebrow">
+        <span>Official Souvenir Program</span>
+        <span>Issued {{ now.UTC | time.Format "Jan 2, 2006" }} · Reprinted daily</span>
+        <span>{{ site.BaseURL | replaceRE `^https?://|/$` "" }}</span>
+    </div>
+
+    <div class="masthead">
+        <span class="masthead-kicker">Every remaining meeting of two AP Top 25 teams</span>
+        <h1 class="masthead-title">Ranked <span class="amp">vs.</span> Ranked</h1>
+        <span class="masthead-sub">{{ .seasonYear }} Season{{ if .pollWeek }} · {{ $pollLabel }}{{ end }}</span>
+    </div>
+
+    <div class="price-seal" aria-hidden="true">
+        <small>PRICE</small>
+        <b>25¢</b>
+        <small>{{ if .pollIsFinal }}FINAL{{ else }}NO. {{ .pollWeek }}{{ end }}</small>
+    </div>
+</header>

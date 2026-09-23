@@ -1,81 +1,64 @@
 {{ partial "header.html" . }}
 
-{{/* The CollegeFootballData API requires a bearer token; CI passes it in as HUGO_APIKEY. */}}
-{{ $apiKey := getenv "HUGO_APIKEY" }}
-{{ if not $apiKey }}
-    {{ errorf "HUGO_APIKEY is not set. The CollegeFootballData API requires an API key." }}
-{{ end }}
+{{ $slate := partialCached "ranked-slate-data.html" . }}
 
-{{/*
-    A college football season runs from late August into January, so before
-    August the season still in progress (or just finished) is the previous
-    calendar year's.
-*/}}
-{{ $seasonYear := now.Year }}
-{{ if lt (int (now.Format "1")) 8 }}
-    {{ $seasonYear = sub $seasonYear 1 }}
-{{ end }}
+{{ partial "cover.html" $slate }}
 
-{{ $apiBaseUrl := default "https://api.collegefootballdata.com" site.Params.apiBaseUrl }}
-{{ $rankingsUrl := printf "%s/rankings?year=%d" $apiBaseUrl $seasonYear }}
-{{ $gamesUrl := printf "%s/games?year=%d&classification=fbs&seasonType=both" $apiBaseUrl $seasonYear }}
-{{ $requestOptions := dict "headers" (dict
-    "Accept" "application/json"
-    "Authorization" (printf "Bearer %s" $apiKey)
-) }}
+{{ partial "headliner.html" $slate }}
 
-{{ $rankingWeeks := partial "cfbd-fetch.html" (dict "url" $rankingsUrl "options" $requestOptions) }}
-{{ $games := partial "cfbd-fetch.html" (dict "url" $gamesUrl "options" $requestOptions) }}
+<div class="spread">
+    <main>
+        <div class="section-head">
+            <h2 class="section-title">Order of Play</h2>
+            <span class="eyebrow" data-timezone-note>Kickoffs in UTC</span>
+        </div>
 
-{{/*
-    Use the most recent AP Top 25. A postseason poll (the final poll) wins over
-    any regular-season week; otherwise take the latest regular-season week that
-    actually includes the AP poll.
-*/}}
-{{ $apRanks := slice }}
-{{ range $seasonType := slice "postseason" "regular" }}
-    {{ range sort (where $rankingWeeks "seasonType" $seasonType) "week" "desc" }}
-        {{ if not $apRanks }}
-            {{ range where .polls "poll" "AP Top 25" }}
-                {{ $apRanks = .ranks }}
+        {{/* Filters need slate.js; it unhides the toolbar once it is wired up. */}}
+        <div class="toolbar" role="toolbar" aria-label="Filter matchups" data-toolbar hidden>
+            <button class="chip" type="button" aria-pressed="false" data-filter="topTenOnly">Top‑10 clashes</button>
+            <button class="chip" type="button" aria-pressed="false" data-filter="conferenceOnly">Conference games</button>
+            <button class="chip is-team" type="button" data-followed-team-chip hidden></button>
+            <span class="toolbar-count" data-result-count></span>
+        </div>
+
+        <div class="slate">
+            {{ range $slate.weekGroups }}
+                <section class="week" aria-label="{{ .label }}" data-week>
+                    <div class="week-head">
+                        <span class="week-number">{{ .label }}</span>
+                        <span class="week-rule" aria-hidden="true"></span>
+                        {{ partial "kickoff-time.html" (dict "game" (index .games 0) "format" "long" "class" "week-dates") }}
+                    </div>
+                    {{ range .games }}
+                        {{ partial "ticket.html" (dict "game" . "teamBySchool" $slate.teamBySchool) }}
+                    {{ end }}
+                </section>
             {{ end }}
-        {{ end }}
-    {{ end }}
-{{ end }}
+            <p class="empty" data-empty-message{{ if $slate.games }} hidden{{ end }}>
+                {{ if $slate.games }}No remaining matchups on the card for this filter.{{ else }}No remaining matchups between AP Top 25 teams.{{ end }}
+            </p>
+        </div>
+    </main>
 
-{{ $rankBySchool := dict }}
-{{ range $apRanks }}
-    {{ $rankBySchool = merge $rankBySchool (dict .school .rank) }}
-{{ end }}
-
-{{ $remainingRankedGames := slice }}
-{{ range sort (where $games "completed" false) "startDate" }}
-    {{ if and (isset $rankBySchool .homeTeam) (isset $rankBySchool .awayTeam) }}
-        {{ $remainingRankedGames = $remainingRankedGames | append . }}
+    {{ with $slate.teams }}
+        <aside class="roster" aria-labelledby="roster-title">
+            <h2 class="roster-title" id="roster-title">The AP Top 25</h2>
+            <p class="roster-note" data-roster-note hidden>Tap a team to follow its road.</p>
+            <ol class="roster-list">
+                {{ range . }}
+                    <li>
+                        <button class="roster-row" type="button" data-school="{{ .school }}" aria-pressed="false"
+                            aria-label="Number {{ .rank }} {{ .school }}, {{ .rankedGamesLeft }} ranked {{ cond (eq .rankedGamesLeft 1) "matchup" "matchups" }} left. Follow">
+                            <span class="roster-rank">{{ .rank }}</span>
+                            <span class="roster-team">{{ .school }}<span class="roster-conf">{{ .conference }}</span></span>
+                            <span class="roster-tally{{ if not .rankedGamesLeft }} is-zero{{ end }}">{{ with .rankedGamesLeft }}{{ strings.Repeat . "▮" }}{{ else }}—{{ end }}</span>
+                        </button>
+                    </li>
+                {{ end }}
+            </ol>
+            <p class="roster-legend">▮ = one ranked matchup left</p>
+        </aside>
     {{ end }}
-{{ end }}
-
-<table class="game-table">
-    <thead>
-        <tr>
-        <th>Week</th>
-        <th>Away Team</th>
-        <th>Home Team</th>
-        </tr>
-    </thead>
-    <tbody>
-    {{ range $remainingRankedGames }}
-        <tr>
-            <td>{{ if eq .seasonType "postseason" }}Postseason{{ else }}{{ .week }}{{ end }}</td>
-            <td>{{ .awayTeam }} ({{ index $rankBySchool .awayTeam }})</td>
-            <td>{{ .homeTeam }} ({{ index $rankBySchool .homeTeam }})</td>
-        </tr>
-    {{ else }}
-        <tr>
-            <td colspan="3">No remaining matchups between AP Top 25 teams.</td>
-        </tr>
-    {{ end }}
-    </tbody>
-</table>
+</div>
 
 {{ partial "footer.html" . }}
