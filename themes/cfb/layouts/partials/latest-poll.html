@@ -1,0 +1,31 @@
+{{/*
+    Picks the most recent release of one poll from a /rankings response.
+    A postseason (final) release wins over any regular-season week; otherwise
+    the latest regular-season week that includes the poll.
+
+    Expects a dict with:
+      rankingWeeks - the decoded /rankings response
+      pollPattern  - a regular expression matched against poll names,
+                     e.g. "^AP Top 25$" or "(?i)playoff"
+
+    Returns a dict with:
+      ranks   - the poll's ranks sorted by rank (empty when not released yet)
+      week    - the week of that release (0 when none)
+      isFinal - true when it is the postseason release
+*/}}
+{{ $ranks := slice }}
+{{ $week := 0 }}
+{{ $isFinal := false }}
+{{ range $seasonType := slice "postseason" "regular" }}
+    {{ range $rankingWeek := sort (where $.rankingWeeks "seasonType" $seasonType) "week" "desc" }}
+        {{ if not $ranks }}
+            {{ range first 1 (where $rankingWeek.polls "poll" "like" $.pollPattern) }}
+                {{ $ranks = sort .ranks "rank" }}
+                {{ $week = $rankingWeek.week }}
+                {{ $isFinal = eq $seasonType "postseason" }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{ return dict "ranks" $ranks "week" $week "isFinal" $isFinal }}

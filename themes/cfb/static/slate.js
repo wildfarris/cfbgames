@@ -1,6 +1,7 @@
 // Progressive enhancement for the ranked slate. The page is fully rendered at
 // build time; this script only localizes kickoff times, runs the headliner
-// countdown, and wires up the filters. Without it the page still reads fine.
+// countdown, wires up the filters, and lets the AP Top 25 sidebar collapse.
+// Without it the page still reads fine.
 (() => {
   "use strict";
 
@@ -150,7 +151,48 @@
     applyFilters();
   }
 
+  // ---------- Collapsible AP Top 25 sidebar (remembered per browser) ----------
+
+  const rosterStorageKey = "ranked-slate-roster-collapsed";
+
+  function setUpRosterToggle() {
+    const toggle = document.querySelector("[data-roster-toggle]");
+    const spread = document.querySelector(".spread");
+    const rosterBody = document.getElementById("roster-body");
+    if (!toggle || !spread || !rosterBody) return;
+
+    function applyCollapsed(isCollapsed) {
+      spread.classList.toggle("is-roster-collapsed", isCollapsed);
+      rosterBody.hidden = isCollapsed;
+      // The arrow itself is drawn by CSS; the label and tooltip say what it does.
+      const action = `${isCollapsed ? "Show" : "Hide"} the AP Top 25`;
+      toggle.setAttribute("aria-expanded", String(!isCollapsed));
+      toggle.setAttribute("aria-label", action);
+      toggle.title = action;
+    }
+
+    let isCollapsed = false;
+    try {
+      isCollapsed = localStorage.getItem(rosterStorageKey) === "true";
+    } catch (storageError) {
+      // Storage unavailable: start open.
+    }
+    applyCollapsed(isCollapsed);
+
+    toggle.addEventListener("click", () => {
+      isCollapsed = !isCollapsed;
+      try {
+        localStorage.setItem(rosterStorageKey, String(isCollapsed));
+      } catch (storageError) {
+        // Storage unavailable: the choice just won't persist.
+      }
+      applyCollapsed(isCollapsed);
+    });
+    toggle.hidden = false;
+  }
+
   localizeKickoffTimes();
+  setUpRosterToggle();
   startCountdown();
   setUpFilters();
 })();

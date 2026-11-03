@@ -1,21 +1,39 @@
-{{/* The program cover. Expects the dict returned by ranked-slate-data.html. */}}
-{{ $pollLabel := cond .pollIsFinal "Final AP Poll" (printf "AP Poll Week %d" (int .pollWeek)) }}
+{{/*
+    The program cover, shared by every page.
+
+    Expects a dict with:
+      kicker      - the italic line above the title
+      titleBefore - the title's first word(s)
+      titleJoiner - the small italic word between them, e.g. "vs."
+      titleAfter  - the title's last word(s)
+      subtitle    - the line under the title
+      railMiddle  - the middle item of the top rail
+      seal        - optional dict { top, value, bottom } for the price seal
+      links       - optional list of { href, label } shown under the subtitle
+*/}}
 <header class="cover">
     <div class="cover-rail eyebrow">
         <span>Official Souvenir Program</span>
-        <span>Issued {{ now.UTC | time.Format "Jan 2, 2006" }} · Reprinted weekly</span>
+        <span>{{ .railMiddle }}</span>
         <span>{{ site.BaseURL | replaceRE `^https?://|/$` "" }}</span>
     </div>
 
     <div class="masthead">
-        <span class="masthead-kicker">Every remaining meeting of two AP Top 25 teams</span>
-        <h1 class="masthead-title">Ranked <span class="amp">vs.</span> Ranked</h1>
-        <span class="masthead-sub">{{ .seasonYear }} Season{{ if .pollWeek }} · {{ $pollLabel }}{{ end }}</span>
+        <span class="masthead-kicker">{{ .kicker }}</span>
+        <h1 class="masthead-title">{{ .titleBefore }} <span class="amp">{{ .titleJoiner }}</span> {{ .titleAfter }}</h1>
+        <span class="masthead-sub">{{ .subtitle }}</span>
+        {{ with .links }}
+            <nav class="cover-links" aria-label="Other pages">
+                {{ range . }}<a class="cover-link" href="{{ .href }}">{{ .label }}</a>{{ end }}
+            </nav>
+        {{ end }}
     </div>
 
-    <div class="price-seal" aria-hidden="true">
-        <small>PRICE</small>
-        <b>25¢</b>
-        <small>{{ if .pollIsFinal }}FINAL{{ else }}NO. {{ .pollWeek }}{{ end }}</small>
-    </div>
+    {{ with .seal }}
+        <div class="price-seal" aria-hidden="true">
+            <small>{{ .top }}</small>
+            <b>{{ .value }}</b>
+            <small>{{ .bottom }}</small>
+        </div>
+    {{ end }}
 </header>

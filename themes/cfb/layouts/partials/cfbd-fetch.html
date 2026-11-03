@@ -7,19 +7,25 @@
 
     Any failure fails the build on purpose: a scheduled deploy should keep the
     last good page live rather than publish an empty table.
+
+    Works across Hugo versions: before v0.141 a failed request comes back as a
+    resource carrying .Err; from v0.141 GetRemote fails the build itself and
+    .Err no longer exists, so it is only read on older versions.
 */}}
 {{ $url := .url }}
 {{ $decoded := slice }}
 
-{{ with resources.GetRemote $url .options }}
-    {{ with .Err }}
-        {{ errorf "Failed to fetch %s: %s" $url . }}
-    {{ else }}
-        {{/* Unmarshal the resource (not .Content) so the response Content-Type decides the format; an empty JSON array would otherwise fail format sniffing. */}}
-        {{ $decoded = unmarshal . }}
-    {{ end }}
-{{ else }}
+{{ $resource := resources.GetRemote $url .options }}
+{{ if not $resource }}
     {{ errorf "Failed to fetch %s: no response" $url }}
+{{ else }}
+    {{ if lt hugo.Version "0.141.0" }}
+        {{ with $resource.Err }}
+            {{ errorf "Failed to fetch %s: %s" $url . }}
+        {{ end }}
+    {{ end }}
+    {{/* Unmarshal the resource (not .Content) so the response Content-Type decides the format; an empty JSON array would otherwise fail format sniffing. */}}
+    {{ $decoded = unmarshal $resource }}
 {{ end }}
 
 {{ return $decoded }}

@@ -1,0 +1,33 @@
+{{/*
+    Shared setup for every CollegeFootballData request.
+
+    Returns a dict with:
+      seasonYear     - the season to show
+      apiBaseUrl     - the API root
+      requestOptions - resources.GetRemote options carrying the bearer token
+*/}}
+
+{{/* The CollegeFootballData API requires a bearer token; CI passes it in as HUGO_APIKEY. */}}
+{{ $apiKey := getenv "HUGO_APIKEY" }}
+{{ if not $apiKey }}
+    {{ errorf "HUGO_APIKEY is not set. The CollegeFootballData API requires an API key." }}
+{{ end }}
+
+{{/*
+    A college football season runs from late August into January, so before
+    August the season still in progress (or just finished) is the previous
+    calendar year's.
+*/}}
+{{ $seasonYear := now.Year }}
+{{ if lt (int (now.Format "1")) 8 }}
+    {{ $seasonYear = sub $seasonYear 1 }}
+{{ end }}
+
+{{ return dict
+    "seasonYear" $seasonYear
+    "apiBaseUrl" (default "https://api.collegefootballdata.com" site.Params.apiBaseUrl)
+    "requestOptions" (dict "headers" (dict
+        "Accept" "application/json"
+        "Authorization" (printf "Bearer %s" $apiKey)
+    ))
+}}

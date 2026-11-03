@@ -1,0 +1,25 @@
+{{/*
+    Fetches one CollegeFootballData endpoint for the season in $cfbd.
+
+    Some endpoints always go out with the same filters (seasonQueries below)
+    so every page builds the identical URL and Hugo fetches it once per build.
+
+    Expects a dict with:
+      cfbd     - the dict returned by cfbd-context.html
+      endpoint - the path without a leading slash, e.g. "games" or "teams/fbs"
+      query    - optional dict of extra query parameters
+*/}}
+{{ $seasonQueries := dict
+    "games" (dict "classification" "fbs" "seasonType" "both")
+}}
+
+{{ $queryParts := slice (printf "year=%d" .cfbd.seasonYear) }}
+{{ range $name, $value := index $seasonQueries .endpoint }}
+    {{ $queryParts = $queryParts | append (printf "%s=%s" $name (urlquery $value)) }}
+{{ end }}
+{{ range $name, $value := .query }}
+    {{ $queryParts = $queryParts | append (printf "%s=%s" $name (urlquery $value)) }}
+{{ end }}
+
+{{ $url := printf "%s/%s?%s" .cfbd.apiBaseUrl .endpoint (delimit $queryParts "&") }}
+{{ return partial "cfbd-fetch.html" (dict "url" $url "options" .cfbd.requestOptions) }}

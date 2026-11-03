@@ -1,0 +1,188 @@
+{{/*
+    Builds everything the head-to-head page needs at build time; ranker.js
+    does the ranking, sorting and comparisons in the browser.
+
+    Requests (rankings and games are shared with the home page, so they are
+    fetched once per build):
+      teams/fbs   - every FBS team with conference and colours
+      games       - records and this season's meetings
+      games/teams - one box-score request per completed week, for per-play
+                    numbers on offense and allowed on defense
+      rankings    - the latest CFP rankings once released, else the AP poll
+
+    Returns a dict with:
+      seasonYear - the season being shown
+      teams      - FBS teams with at least one box score: school, conference,
+                   mascot, abbreviation, alternateNames (for name lookup),
+                   color, alternateColor, wins, losses, and offense/defense
+                   yardsPerPlay, rushYardsPerCarry, passYardsPerAttempt
+      meetings   - completed games between two FBS teams, oldest first
+      poll       - { label, ranks: [{ school, rank }] } to compare against
+      seedPolls  - { ap, coaches }: the latest top 25s ([{ school, rank }]),
+                   which make up the pool and the normal page's starting order
+*/}}
+{{ $cfbd := partial "cfbd-context.html" . }}
+{{ $fbsTeams := partial "cfbd-season-fetch.html" (dict "cfbd" $cfbd "endpoint" "teams/fbs") }}
+{{ $allGames := partial "cfbd-season-fetch.html" (dict "cfbd" $cfbd "endpoint" "games") }}
+{{ $rankingWeeks := partial "cfbd-season-fetch.html" (dict "cfbd" $cfbd "endpoint" "rankings") }}
+
+{{ $completedGames := sort (where (where $allGames "completed" true) "homePoints" "!=" nil) "startDate" }}
+
+{{/* ---------- Records and meetings ---------- */}}
+
+{{ $tally := newScratch }}
+{{ $tally.Set "wins" dict }}
+{{ $tally.Set "losses" dict }}
+{{ $meetings := slice }}
+{{ range $completedGames }}
+    {{ $homeWon := gt .homePoints .awayPoints }}
+    {{ $winner := cond $homeWon .homeTeam .awayTeam }}
+    {{ $loser := cond $homeWon .awayTeam .homeTeam }}
+    {{ $tally.SetInMap "wins" $winner (add (default 0 (index ($tally.Get "wins") $winner)) 1) }}
+    {{ $tally.SetInMap "losses" $loser (add (default 0 (index ($tally.Get "losses") $loser)) 1) }}
+    {{ if and (eq .homeClassification "fbs") (eq .awayClassification "fbs") }}
+        {{ $meetings = $meetings | append (dict
+            "week" .week
+            "seasonType" .seasonType
+            "homeTeam" .homeTeam
+            "homePoints" .homePoints
+            "awayTeam" .awayTeam
+            "awayPoints" .awayPoints
+            "neutralSite" .neutralSite
+        ) }}
+    {{ end }}
+{{ end }}
+
+{{/* ---------- Per-play totals from box scores ---------- */}}
+
+{{/* Each completed week once, e.g. "regular|7" or "postseason|1". */}}
+{{ $weekKeys := slice }}
+{{ range $completedGames }}
+    {{ $weekKeys = $weekKeys | append (printf "%s|%d" .seasonType (int .week)) }}
+{{ end }}
+
+{{ $metricNames := slice "rushYards" "rushAttempts" "passYards" "passAttempts" }}
+{{ range $side := slice "offense" "defense" }}
+    {{ range $metricNames }}
+        {{ $tally.Set (printf "%s.%s" $side .) dict }}
+    {{ end }}
+{{ end }}
+{{ $tally.Set "gamesWithStats" dict }}
+{{ $boxScoreRowCount := 0 }}
+
+{{ range uniq $weekKeys }}
+    {{ $weekParts := split . "|" }}
+    {{ $boxScores := partial "cfbd-season-fetch.html" (dict
+        "cfbd" $cfbd
+        "endpoint" "games/teams"
+        "query" (dict "seasonType" (index $weekParts 0) "week" (index $weekParts 1) "classification" "fbs")
+    ) }}
+    {{ range $boxScores }}
+        {{/* One row per team, values kept as strings; "" means the category was
+             missing. (Yardage can be negative, so no number can mean "missing".) */}}
+        {{ $rows := slice }}
+        {{ range .teams }}
+            {{ $boxScoreRowCount = add $boxScoreRowCount 1 }}
+            {{ $rushYards := "" }}
+            {{ $rushAttempts := "" }}
+            {{ $passYards := "" }}
+            {{ $passAttempts := "" }}
+            {{ range .stats }}
+                {{ if eq .category "rushingYards" }}
+                    {{ $rushYards = .stat }}
+                {{ else if eq .category "rushingAttempts" }}
+                    {{ $rushAttempts = .stat }}
+                {{ else if eq .category "netPassingYards" }}
+                    {{ $passYards = .stat }}
+                {{ else if eq .category "completionAttempts" }}
+                    {{/* "completions-attempts", e.g. "21-34" */}}
+                    {{ $completionParts := split (replace .stat "/" "-") "-" }}
+                    {{ if eq (len $completionParts) 2 }}{{ $passAttempts = index $completionParts 1 }}{{ end }}
+                {{ end }}
+            {{ end }}
+            {{ $rows = $rows | append (dict
+                "team" .team
+                "rushYards" $rushYards
+                "rushAttempts" $rushAttempts
+                "passYards" $passYards
+                "passAttempts" $passAttempts
+            ) }}
+        {{ end }}
+
+        {{/* Both sides need every category: each team's offense is the other's defense. */}}
+        {{ $complete := eq (len $rows) 2 }}
+        {{ range $row := $rows }}
+            {{ range $metric := $metricNames }}
+                {{ if eq (index $row $metric) "" }}{{ $complete = false }}{{ end }}
+            {{ end }}
+        {{ end }}
+
+        {{ if $complete }}
+            {{ range $rowIndex, $row := $rows }}
+                {{ $opponentRow := index $rows (sub 1 $rowIndex) }}
+                {{ $team := index $row "team" }}
+                {{ $tally.SetInMap "gamesWithStats" $team (add (default 0 (index ($tally.Get "gamesWithStats") $team)) 1) }}
+                {{ range $metric := $metricNames }}
+                    {{ $offenseKey := printf "offense.%s" $metric }}
+                    {{ $defenseKey := printf "defense.%s" $metric }}
+                    {{ $tally.SetInMap $offenseKey $team (add (default 0.0 (index ($tally.Get $offenseKey) $team)) (float (index $row $metric))) }}
+                    {{ $tally.SetInMap $defenseKey $team (add (default 0.0 (index ($tally.Get $defenseKey) $team)) (float (index $opponentRow $metric))) }}
+                {{ end }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{/* Fail loudly if box scores came back but none carried the categories used above. */}}
+{{ if and (gt $boxScoreRowCount 0) (not ($tally.Get "gamesWithStats")) }}
+    {{ errorf "Box scores had none of the expected categories (rushingYards, rushingAttempts, netPassingYards, completionAttempts). Check the /games/teams response." }}
+{{ end }}
+
+{{/* ---------- Team profiles ---------- */}}
+
+{{ $teams := slice }}
+{{ range $fbsTeams }}
+    {{ $school := .school }}
+    {{ if index ($tally.Get "gamesWithStats") $school }}
+        {{ $offense := partial "per-play-rates.html" (dict "tally" $tally "side" "offense" "school" $school) }}
+        {{ $defense := partial "per-play-rates.html" (dict "tally" $tally "side" "defense" "school" $school) }}
+        {{ $teams = $teams | append (dict
+            "school" $school
+            "mascot" .mascot
+            "abbreviation" .abbreviation
+            "alternateNames" (default slice .alternateNames)
+            "conference" .conference
+            "color" .color
+            "alternateColor" .alternateColor
+            "wins" (default 0 (index ($tally.Get "wins") $school))
+            "losses" (default 0 (index ($tally.Get "losses") $school))
+            "offense" $offense
+            "defense" $defense
+        ) }}
+    {{ end }}
+{{ end }}
+
+{{/* ---------- Poll to compare against: latest CFP, else AP ---------- */}}
+
+{{/* The committee's poll ("Playoff Committee Rankings") only appears once it's released. */}}
+{{ $pollLabel := "CFP Rankings" }}
+{{ $pollRanks := (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "(?i)playoff")).ranks }}
+{{ if not $pollRanks }}
+    {{ $pollLabel = "AP Poll" }}
+    {{ $pollRanks = (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^AP Top 25$")).ranks }}
+{{ end }}
+{{/* ---------- Pool and starting order: the latest AP and Coaches top 25s ---------- */}}
+
+{{ $apRanks := (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^AP Top 25$")).ranks }}
+{{ $coachesRanks := (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^Coaches Poll$")).ranks }}
+
+{{ return dict
+    "seasonYear" $cfbd.seasonYear
+    "teams" $teams
+    "meetings" $meetings
+    "poll" (dict "label" $pollLabel "ranks" (partial "compact-poll-ranks.html" $pollRanks))
+    "seedPolls" (dict
+        "ap" (partial "compact-poll-ranks.html" $apRanks)
+        "coaches" (partial "compact-poll-ranks.html" $coachesRanks)
+    )
+}}

@@ -1,0 +1,29 @@
+{{/*
+    Turns a team's summed box-score totals into per-play rates for one side
+    of the ball. A rate with no attempts behind it is null.
+
+    Expects a dict with:
+      tally  - the scratch holding "<side>.<metric>" maps keyed by school
+      side   - "offense" (gained) or "defense" (allowed)
+      school - the team
+
+    Returns a dict with yardsPerPlay, rushYardsPerCarry, passYardsPerAttempt.
+*/}}
+{{ $rushYards := default 0 (index (.tally.Get (printf "%s.rushYards" .side)) .school) }}
+{{ $rushAttempts := default 0 (index (.tally.Get (printf "%s.rushAttempts" .side)) .school) }}
+{{ $passYards := default 0 (index (.tally.Get (printf "%s.passYards" .side)) .school) }}
+{{ $passAttempts := default 0 (index (.tally.Get (printf "%s.passAttempts" .side)) .school) }}
+{{ $plays := add $rushAttempts $passAttempts }}
+
+{{ $yardsPerPlay := 0 }}
+{{ $rushYardsPerCarry := 0 }}
+{{ $passYardsPerAttempt := 0 }}
+{{ if gt $plays 0 }}{{ $yardsPerPlay = div (add $rushYards $passYards) (float $plays) }}{{ end }}
+{{ if gt $rushAttempts 0 }}{{ $rushYardsPerCarry = div $rushYards (float $rushAttempts) }}{{ end }}
+{{ if gt $passAttempts 0 }}{{ $passYardsPerAttempt = div $passYards (float $passAttempts) }}{{ end }}
+
+{{ return dict
+    "yardsPerPlay" (cond (gt $plays 0) $yardsPerPlay nil)
+    "rushYardsPerCarry" (cond (gt $rushAttempts 0) $rushYardsPerCarry nil)
+    "passYardsPerAttempt" (cond (gt $passAttempts 0) $passYardsPerAttempt nil)
+}}

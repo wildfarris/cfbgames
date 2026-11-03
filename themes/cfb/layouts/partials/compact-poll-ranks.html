@@ -1,0 +1,11 @@
+{{/*
+    Trims a poll's ranks to what the page needs. Expects the ranks list from
+    latest-poll.html; returns [{ school, rank }] for ranked entries only.
+*/}}
+{{ $compactRanks := slice }}
+{{ range . }}
+    {{ if .rank }}
+        {{ $compactRanks = $compactRanks | append (dict "school" .school "rank" .rank) }}
+    {{ end }}
+{{ end }}
+{{ return $compactRanks }}

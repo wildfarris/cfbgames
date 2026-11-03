@@ -2,7 +2,20 @@
 
 {{ $slate := partialCached "ranked-slate-data.html" . }}
 
-{{ partial "cover.html" $slate }}
+{{ $pollLabel := cond $slate.pollIsFinal "Final AP Poll" (printf "AP Poll Week %d" (int $slate.pollWeek)) }}
+{{ partial "cover.html" (dict
+    "railMiddle" (printf "Issued %s · Reprinted weekly" (now.UTC | time.Format "Jan 2, 2006"))
+    "kicker" "Every remaining meeting of two AP Top 25 teams"
+    "titleBefore" "Ranked"
+    "titleJoiner" "vs."
+    "titleAfter" "Ranked"
+    "subtitle" (printf "%d Season%s" $slate.seasonYear (cond (gt $slate.pollWeek 0) (printf " · %s" $pollLabel) ""))
+    "seal" (dict "top" "PRICE" "value" "25¢" "bottom" (cond $slate.pollIsFinal "FINAL" (printf "NO. %d" (int $slate.pollWeek))))
+    "links" (slice
+        (dict "href" ("rank/" | relURL) "label" "Rank your own top 24, two teams at a time →")
+        (dict "href" ("rank/blind/" | relURL) "label" "Or rank them blind, names hidden →")
+    )
+) }}
 
 {{ partial "headliner.html" $slate }}
 
@@ -42,21 +55,27 @@
 
     {{ with $slate.teams }}
         <aside class="roster" aria-labelledby="roster-title">
-            <h2 class="roster-title" id="roster-title">The AP Top 25</h2>
-            <p class="roster-note" data-roster-note hidden>Tap a team to follow its road.</p>
-            <ol class="roster-list">
-                {{ range . }}
-                    <li>
-                        <button class="roster-row" type="button" data-school="{{ .school }}" aria-pressed="false"
-                            aria-label="Number {{ .rank }} {{ .school }}, {{ .rankedGamesLeft }} ranked {{ cond (eq .rankedGamesLeft 1) "matchup" "matchups" }} left. Follow">
-                            <span class="roster-rank">{{ .rank }}</span>
-                            <span class="roster-team">{{ .school }}<span class="roster-conf">{{ .conference }}</span></span>
-                            <span class="roster-tally{{ if not .rankedGamesLeft }} is-zero{{ end }}">{{ with .rankedGamesLeft }}{{ strings.Repeat . "▮" }}{{ else }}—{{ end }}</span>
-                        </button>
-                    </li>
-                {{ end }}
-            </ol>
-            <p class="roster-legend">▮ = one ranked matchup left</p>
+            <div class="roster-head">
+                <h2 class="roster-title" id="roster-title">The AP Top 25</h2>
+                {{/* slate.js unhides the toggle once wired up; without it the list just stays open. */}}
+                <button class="roster-toggle" type="button" aria-expanded="true" aria-controls="roster-body" aria-label="Hide the AP Top 25" data-roster-toggle hidden></button>
+            </div>
+            <div class="roster-body" id="roster-body">
+                <p class="roster-note" data-roster-note hidden>Tap a team to follow its road.</p>
+                <ol class="roster-list">
+                    {{ range . }}
+                        <li>
+                            <button class="roster-row" type="button" data-school="{{ .school }}" aria-pressed="false"
+                                aria-label="Number {{ .rank }} {{ .school }}, {{ .rankedGamesLeft }} ranked {{ cond (eq .rankedGamesLeft 1) "matchup" "matchups" }} left. Follow">
+                                <span class="roster-rank">{{ .rank }}</span>
+                                <span class="roster-team">{{ .school }}<span class="roster-conf">{{ .conference }}</span></span>
+                                <span class="roster-tally{{ if not .rankedGamesLeft }} is-zero{{ end }}">{{ with .rankedGamesLeft }}{{ strings.Repeat . "▮" }}{{ else }}—{{ end }}</span>
+                            </button>
+                        </li>
+                    {{ end }}
+                </ol>
+                <p class="roster-legend">▮ = one ranked matchup left</p>
+            </div>
         </aside>
     {{ end }}
 </div>

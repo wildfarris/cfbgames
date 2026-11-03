@@ -1,0 +1,100 @@
+{{/*
+    The head-to-head ranker, in two modes set by the page's `mode` param:
+      normal - teams by name, starting in poll order, with "Add a team"
+      blind  - each matchup is "Team A" vs "Team B", shuffled start, names revealed at the end
+    ranker.js reads data-mode and the embedded data.
+*/}}
+{{ partial "header.html" . }}
+
+{{/* One shared build of the data for both pages (the variant key ignores the page). */}}
+{{ $headToHead := partialCached "head-to-head-data.html" . "head-to-head-data" }}
+{{ $isBlind := eq .Params.mode "blind" }}
+
+{{ partial "cover.html" (dict
+    "railMiddle" (cond $isBlind "Blind Edition" "Head-to-Head Edition")
+    "kicker" (cond $isBlind "Stats only. No names until the end." "Two teams at a time. Pick who wins.")
+    "titleBefore" "Head"
+    "titleJoiner" "to"
+    "titleAfter" "Head"
+    "subtitle" (printf "%d Season · Your Top 24%s" $headToHead.seasonYear (cond $isBlind ", Blind" ""))
+    "links" (slice
+        (dict "href" (cond $isBlind ("rank/" | relURL) ("rank/blind/" | relURL)) "label" (cond $isBlind "Show the names instead →" "Try it blind, names hidden →"))
+        (dict "href" ("" | relURL) "label" "← Back to the ranked matchups")
+    )
+) }}
+
+<div class="duel-page" data-ranker data-mode="{{ cond $isBlind "blind" "normal" }}">
+    <main>
+        <div class="section-head">
+            <h2 class="section-title" data-stage-title>Who Wins?</h2>
+            {{ with $headToHead.teams }}<span class="eyebrow" data-stage-note>Ranks are out of {{ len . }} FBS teams</span>{{ end }}
+        </div>
+
+        {{ if $headToHead.teams }}
+            {{/* Everything below needs ranker.js; it shows the duel or final stage once wired up. */}}
+            <noscript><p class="empty">Head to head needs JavaScript to deal out the matchups.</p></noscript>
+
+            {{ if not $isBlind }}
+                <form class="add-team" data-add-team hidden>
+                    <label class="add-team-label">Missing someone?
+                        <input type="text" name="team" list="add-team-options" autocomplete="off" spellcheck="false"
+                            placeholder="Start typing a team…" aria-describedby="add-team-message">
+                    </label>
+                    <datalist id="add-team-options"></datalist>
+                    <button class="chip" type="submit">Add to the field</button>
+                    <span class="add-team-message" id="add-team-message" aria-live="polite" data-add-team-message></span>
+                    <details class="add-team-field">
+                        <summary>Who’s in the field (<span data-field-count></span>)</summary>
+                        <p data-field-list></p>
+                    </details>
+                </form>
+            {{ end }}
+
+            <section data-duel-stage hidden>
+                <div class="duel-progress">
+                    <div class="duel-progress-track"><div class="duel-progress-fill" data-progress-fill></div></div>
+                    <div class="duel-progress-text">
+                        <span data-progress-count></span>
+                        <span data-progress-left></span>
+                    </div>
+                </div>
+
+                <div class="duel">
+                    <article class="contender" data-contender="left"></article>
+                    <span class="duel-joiner" aria-hidden="true">vs.</span>
+                    <article class="contender" data-contender="right"></article>
+                </div>
+
+                <div class="meeting" data-meeting></div>
+
+                <div class="matchup-strip" data-matchup-strip></div>
+
+                <div class="duel-actions">
+                    <button class="chip" type="button" data-undo>Undo last pick</button>
+                    <button class="chip" type="button" data-restart>Start over</button>
+                </div>
+                <p class="duel-legend">
+                    {{ if $isBlind }}The field is this week’s AP and Coaches top 25s, shuffled · {{ else }}The field is this week’s AP and Coaches top 25s, in poll order · {{ end -}}
+                    Only your top 24 is kept · #1 is best on both sides of the ball · Opponents = their combined record, not counting games against this team; #1 is the toughest schedule · Avg stat rank = mean of the six ranks · Edge goes to the better rank, “Even” when within 10 spots · Close = a coin flip, placed right beside that team · Easily = it’s not close · ← / → to pick, Shift for Easily · Progress saves in this browser until the polls change
+                </p>
+                <div class="award-key" data-award-key></div>
+            </section>
+
+            <section class="final" data-final-stage hidden>
+                <ol class="final-list" data-final-list></ol>
+                <p class="final-cut" data-final-cut></p>
+                <p class="duel-legend" data-poll-legend></p>
+                <div class="duel-actions">
+                    <button class="chip" type="button" data-undo>Undo last pick</button>
+                    <button class="chip" type="button" data-restart>Start over</button>
+                </div>
+            </section>
+
+            <script type="application/json" id="head-to-head-data">{{ $headToHead | jsonify | safeJS }}</script>
+        {{ else }}
+            <p class="empty">No games have been played yet this season. Check back after the first week.</p>
+        {{ end }}
+    </main>
+</div>
+
+{{ partial "footer.html" . }}
