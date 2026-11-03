@@ -1,0 +1,51 @@
+{{/*
+    Whether the blind ranker is open yet, and the rules for who's in its field.
+    The numbers live in hugo.toml under [params.headToHead.blind].
+
+    Blind opens once `opensAfterWeek` regular-season weeks are final, so every
+    team has a few games of stats behind it. A week counts as final when all of
+    its games are done, or once a game from a later week has been played (so a
+    cancelled game can't hold it shut).
+
+    Returns a dict with:
+      isOpen                 - true once enough weeks are final (always after the regular season)
+      opensAfterWeek         - the week that has to be final first
+      finalRegularWeeks      - how many regular-season weeks are final so far
+      statRankCutoff         - in the field: top N in yards per play on offense or defense
+      recordRuleMinimumGames - from this many games played, a team must also be .500 or better
+
+    Call it with partialCached: the home page and both ranker pages share it.
+*/}}
+{{ $rules := site.Params.headToHead.blind }}
+{{ $opensAfterWeek := int $rules.opensAfterWeek }}
+
+{{ $cfbd := partial "cfbd-context.html" . }}
+{{ $allGames := partial "cfbd-season-fetch.html" (dict "cfbd" $cfbd "endpoint" "games") }}
+{{ $regularGames := where $allGames "seasonType" "regular" }}
+
+{{ $latestPlayedWeek := 0 }}
+{{ $earliestUnplayedWeek := 0 }}
+{{ range $regularGames }}
+    {{ $week := int .week }}
+    {{ if and .completed (ne .homePoints nil) }}
+        {{ if gt $week $latestPlayedWeek }}{{ $latestPlayedWeek = $week }}{{ end }}
+    {{ else if or (eq $earliestUnplayedWeek 0) (lt $week $earliestUnplayedWeek) }}
+        {{ $earliestUnplayedWeek = $week }}
+    {{ end }}
+{{ end }}
+
+{{/* Weeks before the latest one with a result are final; so is every week before the first unplayed game. */}}
+{{ $finalRegularWeeks := $latestPlayedWeek }}
+{{ if $earliestUnplayedWeek }}
+    {{ $finalRegularWeeks = math.Max (sub $latestPlayedWeek 1) (sub $earliestUnplayedWeek 1) 0 | int }}
+{{ end }}
+
+{{ $postseasonStarted := where (where $allGames "seasonType" "postseason") "completed" true }}
+
+{{ return dict
+    "isOpen" (or (ge $finalRegularWeeks $opensAfterWeek) (gt (len $postseasonStarted) 0))
+    "opensAfterWeek" $opensAfterWeek
+    "finalRegularWeeks" $finalRegularWeeks
+    "statRankCutoff" (int $rules.statRankCutoff)
+    "recordRuleMinimumGames" (int $rules.recordRuleMinimumGames)
+}}

@@ -3,6 +3,11 @@
 {{ $slate := partialCached "ranked-slate-data.html" . }}
 
 {{ $pollLabel := cond $slate.pollIsFinal "Final AP Poll" (printf "AP Poll Week %d" (int $slate.pollWeek)) }}
+
+{{ $rankerLinks := slice (dict "href" ("rank/" | relURL) "label" "Rank your own top 24, two teams at a time →") }}
+{{ if (partialCached "blind-field.html" .).isOpen }}
+    {{ $rankerLinks = $rankerLinks | append (dict "href" ("rank/blind/" | relURL) "label" "Or rank them blind, names hidden →") }}
+{{ end }}
 {{ partial "cover.html" (dict
     "railMiddle" (printf "Issued %s · Reprinted weekly" (now.UTC | time.Format "Jan 2, 2006"))
     "kicker" "Every remaining meeting of two AP Top 25 teams"
@@ -11,10 +16,7 @@
     "titleAfter" "Ranked"
     "subtitle" (printf "%d Season%s" $slate.seasonYear (cond (gt $slate.pollWeek 0) (printf " · %s" $pollLabel) ""))
     "seal" (dict "top" "PRICE" "value" "25¢" "bottom" (cond $slate.pollIsFinal "FINAL" (printf "NO. %d" (int $slate.pollWeek))))
-    "links" (slice
-        (dict "href" ("rank/" | relURL) "label" "Rank your own top 24, two teams at a time →")
-        (dict "href" ("rank/blind/" | relURL) "label" "Or rank them blind, names hidden →")
-    )
+    "links" $rankerLinks
 ) }}
 
 {{ partial "headliner.html" $slate }}

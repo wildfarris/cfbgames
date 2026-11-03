@@ -19,7 +19,8 @@
       meetings   - completed games between two FBS teams, oldest first
       poll       - { label, ranks: [{ school, rank }] } to compare against
       seedPolls  - { ap, coaches }: the latest top 25s ([{ school, rank }]),
-                   which make up the pool and the normal page's starting order
+                   which make up the normal page's pool and starting order
+      blindField - when the blind page opens and who's in its field (blind-field.html)
 */}}
 {{ $cfbd := partial "cfbd-context.html" . }}
 {{ $fbsTeams := partial "cfbd-season-fetch.html" (dict "cfbd" $cfbd "endpoint" "teams/fbs") }}
@@ -171,7 +172,7 @@
     {{ $pollLabel = "AP Poll" }}
     {{ $pollRanks = (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^AP Top 25$")).ranks }}
 {{ end }}
-{{/* ---------- Pool and starting order: the latest AP and Coaches top 25s ---------- */}}
+{{/* ---------- Normal page's pool and starting order: the latest AP and Coaches top 25s ---------- */}}
 
 {{ $apRanks := (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^AP Top 25$")).ranks }}
 {{ $coachesRanks := (partial "latest-poll.html" (dict "rankingWeeks" $rankingWeeks "pollPattern" "^Coaches Poll$")).ranks }}
@@ -185,4 +186,5 @@
         "ap" (partial "compact-poll-ranks.html" $apRanks)
         "coaches" (partial "compact-poll-ranks.html" $coachesRanks)
     )
+    "blindField" (partialCached "blind-field.html" .)
 }}

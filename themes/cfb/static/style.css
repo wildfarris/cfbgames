@@ -533,9 +533,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   scrollbar-width: thin;
   scrollbar-color: var(--ink-soft) transparent;
 }
-/* Stacked above the matchups on narrow screens: not pinned, so the full list shows. */
+/* Stacked above the matchups on narrow screens: not pinned, so the full list shows.
+   Static (not relative) so the sticky `top` offset can't shift it down over the matchups. */
 @media (max-width: 60rem) {
-  .roster { position: relative; max-height: none; }
+  .roster { position: static; max-height: none; }
   .roster-body { overflow: visible; }
 }
 

@@ -6,8 +6,8 @@
 // Two modes share everything below (set by data-mode on [data-ranker]):
 //   normal - teams show by name; the pool starts in poll order
 //   blind  - each matchup shows "Team A" and "Team B" with stats, record and
-//            a margin tier for any meeting; the pool starts shuffled; names
-//            are revealed at the end
+//            a margin tier for any meeting; the pool comes from the stats
+//            (no polls) and starts shuffled; names are revealed at the end
 (() => {
   "use strict";
 
@@ -95,7 +95,11 @@
   const teamBySchool = new Map(teams.map((team) => [team.school, team]));
   const fbsTeamCount = teams.length;
 
-  // ---------- Pool: the AP and Coaches top 25s, ordered by their average rank ----------
+  // ---------- Pool ----------
+  // Normal: the AP and Coaches top 25s, ordered by their average rank.
+  // Blind: no polls at all. Every team in the top N for yards per play on
+  // offense or defense, and .500 or better once it has played enough games
+  // (rules from blind-field.html / hugo.toml).
 
   const unrankedSpot = 26; // a team in only one poll counts as just outside the other
   const apRankBySchool = new Map(pageData.seedPolls.ap.map((entry) => [entry.school, entry.rank]));
@@ -106,11 +110,21 @@
     return averageOf([apRankBySchool.get(school) ?? unrankedSpot, coachesRankBySchool.get(school) ?? unrankedSpot]);
   }
 
-  const poolSchools = [...new Set([...apRankBySchool.keys(), ...coachesRankBySchool.keys()])]
-    .filter((school) => teamBySchool.has(school))
-    .sort((first, second) => pollSeed(first) - pollSeed(second)
-      || teamBySchool.get(first).averageStatRank - teamBySchool.get(second).averageStatRank
-      || first.localeCompare(second));
+  function isInBlindField(team) {
+    const { statRankCutoff, recordRuleMinimumGames } = pageData.blindField;
+    const madeStatCut = Math.min(team.ranks.offense.yardsPerPlay, team.ranks.defense.yardsPerPlay) <= statRankCutoff;
+    const gamesPlayed = team.wins + team.losses;
+    const meetsRecordRule = gamesPlayed < recordRuleMinimumGames || team.wins >= team.losses;
+    return madeStatCut && meetsRecordRule;
+  }
+
+  const poolSchools = isBlind
+    ? teams.filter(isInBlindField).map((team) => team.school).sort((first, second) => first.localeCompare(second))
+    : [...new Set([...apRankBySchool.keys(), ...coachesRankBySchool.keys()])]
+      .filter((school) => teamBySchool.has(school))
+      .sort((first, second) => pollSeed(first) - pollSeed(second)
+        || teamBySchool.get(first).averageStatRank - teamBySchool.get(second).averageStatRank
+        || first.localeCompare(second));
 
   // ---------- Meetings this season ----------
 
@@ -348,14 +362,23 @@
     render();
   }
 
-  // A rough count: about two picks per team when you agree with the polls,
-  // and a halving search's worth per team when starting blind.
+  // A rough count. Normal: about two picks per team when you agree with the polls.
+  // Blind: a search through the list as it grows (plus a half pick for the
+  // gallop); once it's full, one pick against #24 and a search only for
+  // newcomers that get in (about 24 in every teams-seen-so-far). Within a few
+  // percent of simulated runs for fields of 27 to 55.
   function expectedPicksLeft() {
     if (!sortState.candidate) return 0;
     const teamsLeft = sortState.waiting.length + 1;
     if (!isBlind) return teamsLeft * 2;
-    const listSize = Math.min(sortState.placed.length + 1, rankedCount);
-    return Math.ceil(teamsLeft * Math.log2(listSize + 1));
+    let teamsSeen = sortState.placed.length + sortState.cut.length;
+    let picksLeft = 0;
+    for (let team = 0; team < teamsLeft; team += 1) {
+      const searchPicks = Math.log2(Math.min(teamsSeen, rankedCount) + 1) + 0.5;
+      picksLeft += teamsSeen >= rankedCount ? 1 + searchPicks * rankedCount / (teamsSeen + 1) : searchPicks;
+      teamsSeen += 1;
+    }
+    return Math.ceil(picksLeft);
   }
 
   // ---------- Saved progress (this browser only) ----------
@@ -368,7 +391,7 @@
     }
   }
 
-  // Saved progress is reused only while the polls (and so the pool) are unchanged.
+  // Saved progress is reused only while the pool is unchanged (new polls, or new stats in blind).
   function loadProgress() {
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey));

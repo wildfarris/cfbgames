@@ -7,6 +7,12 @@ disableKinds = ['taxonomy', 'term']
 [params]
   apiBaseUrl = 'https://api.collegefootballdata.com'
 
+# The blind ranker (/rank/blind/): when it opens and who's in its field.
+[params.headToHead.blind]
+  opensAfterWeek = 3          # opens once this regular-season week is final
+  statRankCutoff = 20         # in the field: top 20 in yards per play on offense or defense
+  recordRuleMinimumGames = 4  # from 4 games played, a team must also be .500 or better
+
 # resources.GetRemote uses the getresource cache (getjson is only for data.GetJSON).
 [caches]
   [caches.getresource]

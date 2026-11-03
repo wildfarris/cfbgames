@@ -1,7 +1,8 @@
 {{/*
     The head-to-head ranker, in two modes set by the page's `mode` param:
       normal - teams by name, starting in poll order, with "Add a team"
-      blind  - each matchup is "Team A" vs "Team B", shuffled start, names revealed at the end
+      blind  - each matchup is "Team A" vs "Team B", shuffled start, names revealed at the end;
+               its field comes from the stats, and it opens a few weeks in (blind-field.html)
     ranker.js reads data-mode and the embedded data.
 */}}
 {{ partial "header.html" . }}
@@ -9,6 +10,17 @@
 {{/* One shared build of the data for both pages (the variant key ignores the page). */}}
 {{ $headToHead := partialCached "head-to-head-data.html" . "head-to-head-data" }}
 {{ $isBlind := eq .Params.mode "blind" }}
+{{ $blindField := partialCached "blind-field.html" . }}
+{{/* Before it opens, the blind page only says when; the normal page doesn't link to it. */}}
+{{ $isBlindClosed := and $isBlind (not $blindField.isOpen) }}
+
+{{ $coverLinks := slice }}
+{{ if $isBlind }}
+    {{ $coverLinks = $coverLinks | append (dict "href" ("rank/" | relURL) "label" "Show the names instead →") }}
+{{ else if $blindField.isOpen }}
+    {{ $coverLinks = $coverLinks | append (dict "href" ("rank/blind/" | relURL) "label" "Try it blind, names hidden →") }}
+{{ end }}
+{{ $coverLinks = $coverLinks | append (dict "href" ("" | relURL) "label" "← Back to the ranked matchups") }}
 
 {{ partial "cover.html" (dict
     "railMiddle" (cond $isBlind "Blind Edition" "Head-to-Head Edition")
@@ -17,20 +29,19 @@
     "titleJoiner" "to"
     "titleAfter" "Head"
     "subtitle" (printf "%d Season · Your Top 24%s" $headToHead.seasonYear (cond $isBlind ", Blind" ""))
-    "links" (slice
-        (dict "href" (cond $isBlind ("rank/" | relURL) ("rank/blind/" | relURL)) "label" (cond $isBlind "Show the names instead →" "Try it blind, names hidden →"))
-        (dict "href" ("" | relURL) "label" "← Back to the ranked matchups")
-    )
+    "links" $coverLinks
 ) }}
 
 <div class="duel-page" data-ranker data-mode="{{ cond $isBlind "blind" "normal" }}">
     <main>
         <div class="section-head">
-            <h2 class="section-title" data-stage-title>Who Wins?</h2>
-            {{ with $headToHead.teams }}<span class="eyebrow" data-stage-note>Ranks are out of {{ len . }} FBS teams</span>{{ end }}
+            <h2 class="section-title" data-stage-title>{{ cond $isBlindClosed "Not Yet" "Who Wins?" }}</h2>
+            {{ if not $isBlindClosed }}{{ with $headToHead.teams }}<span class="eyebrow" data-stage-note>Ranks are out of {{ len . }} FBS teams</span>{{ end }}{{ end }}
         </div>
 
-        {{ if $headToHead.teams }}
+        {{ if $isBlindClosed }}
+            <p class="empty">The blind edition opens once week {{ $blindField.opensAfterWeek }} is final, so every team has a few games of stats behind it. Until then, <a href="{{ "rank/" | relURL }}">rank them by name</a>.</p>
+        {{ else if $headToHead.teams }}
             {{/* Everything below needs ranker.js; it shows the duel or final stage once wired up. */}}
             <noscript><p class="empty">Head to head needs JavaScript to deal out the matchups.</p></noscript>
 
@@ -74,8 +85,8 @@
                     <button class="chip" type="button" data-restart>Start over</button>
                 </div>
                 <p class="duel-legend">
-                    {{ if $isBlind }}The field is this week’s AP and Coaches top 25s, shuffled · {{ else }}The field is this week’s AP and Coaches top 25s, in poll order · {{ end -}}
-                    Only your top 24 is kept · #1 is best on both sides of the ball · Opponents = their combined record, not counting games against this team; #1 is the toughest schedule · Avg stat rank = mean of the six ranks · Edge goes to the better rank, “Even” when within 10 spots · Close = a coin flip, placed right beside that team · Easily = it’s not close · ← / → to pick, Shift for Easily · Progress saves in this browser until the polls change
+                    {{ if $isBlind }}The field is every team in the top {{ $blindField.statRankCutoff }} for yards per play on offense or defense, .500 or better once they’ve played {{ $blindField.recordRuleMinimumGames }}, shuffled · {{ else }}The field is this week’s AP and Coaches top 25s, in poll order · {{ end -}}
+                    Only your top 24 is kept · #1 is best on both sides of the ball · Opponents = their combined record, not counting games against this team; #1 is the toughest schedule · Avg stat rank = mean of the six ranks · Edge goes to the better rank, “Even” when within 10 spots · Close = a coin flip, placed right beside that team · Easily = it’s not close · ← / → to pick, Shift for Easily · Progress saves in this browser until the field changes
                 </p>
                 <div class="award-key" data-award-key></div>
             </section>
